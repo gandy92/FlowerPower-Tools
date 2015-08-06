@@ -26,6 +26,8 @@ var loop1 = 0;
 var loop2 = 0;
 var loop3 = 0;
 
+var order = 0;
+
 var startIdx = 0;
 var NbrEntries = 0;
 var lastEntry = 0;
@@ -64,10 +66,10 @@ function(callback) {
   clientSecret = param[1];
   userName     = param[2];
   passPhrase   = param[3];
-  console.log(clientID);
-  console.log(clientSecret);
+  console.log(Date() + ' Starting new sync for clientID: ' + clientID);
+/*  console.log(clientSecret);
   console.log(userName);
-  console.log(passPhrase);
+  console.log(passPhrase); */
 
   api = new CloudAPI.CloudAPI({ clientID: clientID, clientSecret: clientSecret });
 
@@ -84,6 +86,7 @@ function(callback) {
       user_config_version1 = user_config_version;
       tabSensors = tabSensorSerial;
       tabIndex = tabHistoryIndex;
+      console.log('user_config_version1=' + user_config_version1 + ' tabSensors=' + tabSensors + ' tabIndex=' + tabIndex);
       callback();
     });
   }).on('error', function(err) {
@@ -109,7 +112,7 @@ function(callback) {
         uuid += res[t];
       }
       uuidTab.push(uuid);
-      loop1 = loop1 + 1;
+      loop1 ++;
       uuid = "";
       discoUuid();
     }
@@ -132,10 +135,10 @@ function(callback) {
     for(i = 0; i < uuidTab.length; i++){
       if(uuidTab[i] === flowerPower.uuid) {
         tab.splice(i,0,flowerPower);
-        console.log("SLICE")
+        console.log("SPLICE i=" + i + ' fp=' + flowerPower.uuid)
       }
     }
-    loop1 = loop1 + 1
+    loop1 ++;
   });
 },
 
@@ -155,9 +158,15 @@ function(callback) {
             });
             console.log('connectAndSetup' + tab[i]);
             tab[i].connectAndSetup(callback);
+            for(x = 0; x < tabIndex.length; x++){
+              if(uuidTab[x] === tab[i].uuid) {
+              order = x;
+              console.log("order id x=" + order)
+              }
+            }
           },
 
-          function(callback) {
+/*          function(callback) {
             console.log('readFriendlyName');
             tab[i].readFriendlyName(function(friendlyName) {
               tab[i].writeFriendlyName(friendlyName, callback);
@@ -165,69 +174,71 @@ function(callback) {
           },
 
           function(callback) {
-            console.log('getHistoryNbEntries');
             tab[i].getHistoryNbEntries(function(data) {
               NbrEntries = data;
+            console.log('getHistoryNbEntries: ' + NbrEntries);
               callback();
             });
           },
-
+*/
           function(callback) {
-            console.log('getHistoryLastEntryIdx');
             tab[i].getHistoryLastEntryIdx(function(data) {
               lastEntry = data;
-              startIdx = tabIndex[i];
+              console.log('getHistoryLastEntryIdx:' + lastEntry);
+              startIdx = tabIndex[order];
               callback();
             });
           },
 
           function(callback) {
-            console.log('getHistoryCurrentSessionID');
             tab[i].getHistoryCurrentSessionID(function(data) {
               currentID = data;
+              console.log('getHistoryCurrentSessionID: ' + currentID);
               callback();
             });
           },
 
           function(callback) {
-            console.log('getHistoryCurrentSessionStartIdx');
             tab[i].getHistoryCurrentSessionStartIdx(function(data) {
               sessionStartIndex = data;
+              console.log('getHistoryCurrentSessionStartIdx: ' + sessionStartIndex);
               callback();
             });
           },
 
           function(callback) {
-            console.log('getHistoryCurrentSessionPeriod');
             tab[i].getHistoryCurrentSessionPeriod(function(data) {
               sessionPeriod = data;
+              console.log('getHistoryCurrentSessionPeriod: ' + sessionPeriod);
               callback();
             });
           },
 
           function(callback) {
-            console.log('getStartUpTime');
             tab[i].getStartupTime(function(startupTime) {
               sUpTime = startupTime;
+              console.log('getStartUpTime: ' + sUpTime);
               callback();
             });
           },
 
           function(callback) {
-            console.log('getHistory ' + startIdx);
-            if (startIdx == null || (lastEntry - startIdx) > maxIndexRecovery || (startIdx - lastEntry) > 1) {
+            console.log('getHistory original startIdx=' + startIdx);
+            if (startIdx == null || (lastEntry - startIdx) > maxIndexRecovery || (startIdx - lastEntry) > 0) {
               startIdx = lastEntry - defaultIndexRecovery;
+              console.log('modified startIdx=' + startIdx);
             }
             else {
               startIdx = startIdx;
             }
-            if ((startIdx - lastEntry) == 1) {
+            if ((startIdx - lastEntry) == 0) {
               console.log("All samples already uploaded");
-              console.log('disconnect');
+              historic = '';
+/*              console.log('disconnect');
               tab[i].disconnect(callback);
               loop2 ++;
               analyser(loop2);
-            }
+*/            }
             else {
               tab[i].getHistory(startIdx, function(error, history) {
                 historic = history;
@@ -236,15 +247,16 @@ function(callback) {
             }
           },
 
-          function (callback) {
-            fs.appendFile(tab[i].uuid+'.txt', historic, function (err) {
+/*          function (callback) {
+            fs.writeFile(tab[i].uuid+'.txt', historic, function (err) {
               if (err) throw err;
               callback();
             });
           },
-
+*/
           function (callback) {
-            api.uploadGarden(tabSensors[i], user_config_version1, sUpTime, historic, currentID, sessionPeriod, sessionStartIndex, function(err) {
+            api.uploadGarden(tabSensors[order], user_config_version1, sUpTime, historic, currentID, sessionPeriod, sessionStartIndex, function(err) {
+              console.log('uploaded to sensor '+ tabSensors[order]);
               console.log('disconnect');
               tab[i].disconnect(callback);
               loop2 ++;
