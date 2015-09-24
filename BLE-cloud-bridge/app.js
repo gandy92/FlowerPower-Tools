@@ -32,8 +32,8 @@ var startIdx = 0;
 var NbrEntries = 0;
 var lastEntry = 0;
 
-var firstPartUuid = 7;
-var lastPartUuid = 11;
+var firstPartUuid = 6;
+var lastPartUuid = 10;
 var defaultIndexRecovery = 200;
 var maxIndexRecovery = 3840;
 var waitTimeoutMs = 10000;
@@ -111,6 +111,7 @@ function(callback) {
       for(t = lastPartUuid; t < res.length; t++){
         uuid += res[t];
       }
+      // console.log("i=" + uuidTab.length + " uuid=" + uuid);
       uuidTab.push(uuid);
       loop1 ++;
       uuid = "";
