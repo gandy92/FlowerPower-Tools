@@ -194,6 +194,19 @@ function connectAndReadout(uuid, callback)
     },
 
     //---------------------------------------------------------------------
+    function(callback) {
+      devices[uuid].state= 'connected';
+      try {
+            // console.log('readBatteryLevel');
+            sensor.readBatteryLevel(function(batteryLevel) {
+              console.log('readBatteryLevel:' + batteryLevel);
+              devices[uuid].batteryLevel = batteryLevel;
+              callback();
+            });
+      } catch(error) { callback("readBatteryLevel: "+error.message); }
+    },
+
+    //---------------------------------------------------------------------
     function(callback) { // -------- waterfall task: getHistoryLastEntryIdx
       devices[uuid].state= 'connected';
       try {
