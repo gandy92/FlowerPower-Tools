@@ -25,6 +25,8 @@ var uuidTab = [];
 var param = [];
 var devices = [];
 
+var http = require("http");
+
 // instead of async.series(), use async.waterfall() and callback(err) to skip to final callback(err,result)
 //
 async.waterfall([
@@ -49,6 +51,7 @@ function(callback) {
   clientSecret = param[1];
   userName     = param[2];
   passPhrase   = param[3];
+  station      = param[4];
   console.log(Date() + ' Starting new sync for clientID: ' + clientID);
 /*  console.log(clientSecret);
   console.log(userName);
@@ -336,6 +339,26 @@ function connectAndReadout(uuid, callback)
             callback();
           }
       } catch(error) { callback(": "+error.message); }
+    },
+
+    //--------------------------------------------------------------
+    function(callback) { // -------- waterfall task: disconnect
+      console.log("informing FHEM about "+uuid);
+      try {
+            var cmd="setreading " + station + "FlowerPower last";
+            cmd= cmd + " uuid:" + uuid;
+            cmd= cmd + " batteryLevel:" + devices[uuid].batteryLevel;
+            cmd= cmd + " historyStartIdx:" + startIdx;
+            cmd= cmd + " historyLastEntry:" + lastEntry;
+            cmd= cmd + " sessionID:" + currentID;
+            cmd= cmd + " sessionStartIdx:" + sessionStartIndex;
+            console.log("cmd is "+cmd);
+            http.get({
+                host:'hal.fritz.box', 
+                port:8088, 
+                path: '/fhem?cmd='+encodeURIComponent(cmd)});
+            callback();
+      } catch(error) { callback(": "+error.message); return; }
     },
 
     //--------------------------------------------------------------
