@@ -342,16 +342,6 @@ function connectAndReadout(uuid, callback)
     },
 
     //--------------------------------------------------------------
-    function(callback) { // -------- waterfall task: disconnect
-      if (1<=debug) console.log("final steps for "+uuid);
-      devices[uuid].state= 'disconnect';
-      try {
-            console.log("disconnect from "+uuid);
-            sensor.disconnect(callback);
-      } catch(error) { callback(": "+error.message); return; }
-    },
-
-    //--------------------------------------------------------------
     function(callback) { // -------- waterfall task: report to FHEM
       console.log("informing FHEM about "+uuid);
       try {
@@ -375,6 +365,16 @@ function connectAndReadout(uuid, callback)
                 console.log('Got error on http.get(): ${e.message}');
             });
             callback();
+      } catch(error) { callback(": "+error.message); return; }
+    },
+
+    //--------------------------------------------------------------
+    function(callback) { // -------- waterfall task: disconnect
+      if (1<=debug) console.log("final steps for "+uuid);
+      devices[uuid].state= 'disconnect';
+      try {
+            console.log("disconnect from "+uuid);
+            sensor.disconnect(callback);
       } catch(error) { callback(": "+error.message); return; }
     }
 
