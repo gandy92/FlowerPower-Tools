@@ -343,6 +343,16 @@ function connectAndReadout(uuid, callback)
 
     //--------------------------------------------------------------
     function(callback) { // -------- waterfall task: disconnect
+      if (1<=debug) console.log("final steps for "+uuid);
+      devices[uuid].state= 'disconnect';
+      try {
+            console.log("disconnect from "+uuid);
+            sensor.disconnect(callback);
+      } catch(error) { callback(": "+error.message); return; }
+    },
+
+    //--------------------------------------------------------------
+    function(callback) { // -------- waterfall task: report to FHEM
       console.log("informing FHEM about "+uuid);
       try {
             var cmd="setreading " + station + "FlowerPower last";
@@ -356,18 +366,15 @@ function connectAndReadout(uuid, callback)
             http.get({
                 host:'hal.fritz.box', 
                 port:8088, 
-                path: '/fhem?cmd='+encodeURIComponent(cmd)});
+                path: '/fhem?cmd='+encodeURIComponent(cmd)+'&XHR=1'
+            }, (res) => {
+                console.log(`Got response: ${res.statusCode}`);
+                // consume response body
+                res.resume();
+            }).on('error', (e) => {
+                console.log('Got error on http.get(): ${e.message}');
+            });
             callback();
-      } catch(error) { callback(": "+error.message); return; }
-    },
-
-    //--------------------------------------------------------------
-    function(callback) { // -------- waterfall task: disconnect
-      if (1<=debug) console.log("final steps for "+uuid);
-      devices[uuid].state= 'disconnect';
-      try {
-            console.log("disconnect from "+uuid);
-            sensor.disconnect(callback);
       } catch(error) { callback(": "+error.message); return; }
     }
 
@@ -380,6 +387,23 @@ function connectAndReadout(uuid, callback)
         return; // no further callbacks!
       }
       console.log("** Early end of waterfall (uuid="+uuid+"): ",error);
+      try {
+            var cmd="setreading " + station + "FlowerPower last";
+            cmd= cmd + " uuid:" + uuid;
+            cmd= cmd + " lastError:" + error;
+            console.log("cmd is "+cmd);
+            http.get({
+                host:'hal.fritz.box',
+                port:8088,
+                path: '/fhem?cmd='+encodeURIComponent(cmd)+'&XHR=1'
+            }, (res) => {
+                console.log(`Got response: ${res.statusCode}`);
+                // consume response body
+                res.resume();
+            }).on('error', (e) => {
+                console.log('Got error on http.get(): ${e.message}');
+            });
+      } catch(error) { callback(": "+error.message); return; }
     } else {
       console.log("Finishing waterfall (uuid="+uuid+") as planned.");
     } 
