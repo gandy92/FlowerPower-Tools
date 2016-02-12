@@ -53,9 +53,6 @@ function(callback) {
   passPhrase   = param[3];
   station      = param[4];
   console.log(Date() + ' Starting new sync for clientID: ' + clientID);
-/*  console.log(clientSecret);
-  console.log(userName);
-  console.log(passPhrase); */
 
   api = new CloudAPI.CloudAPI({ clientID: clientID, clientSecret: clientSecret });
 
@@ -133,6 +130,18 @@ function(callback) {
     
     callback();
   });
+},
+
+// ---------------------------------------------------------------------------------
+// report to FHEM
+//
+function(callback) {
+  async.eachSeries(uuidTab, function iterator(uuid, callback) {
+    reportToFHEM(uuid,callback);
+  }, function done() {
+
+    callback();
+  });
 }
 
 //////////////////////////////////////////////////////////////////////////////////// 
@@ -141,11 +150,98 @@ function(callback) {
     console.log("Error in main waterfall: ",error);
   } else {
     console.log("Main waterfall dried out. Goodbye.");
+    // console.log("one last dump of devices: ")
+    // console.log(devices);
   }
   process.exit(0);
 }); //async.waterfall
 
 
+
+
+
+function reportToFHEM(uuid, callback)
+{
+  async.waterfall([
+
+    //--------------------------------------------------------------
+    function(callback) { // -------- waterfall task: report to FHEM
+      if (devices[uuid].state == 'unconfirmed') {
+        console.log("did not see "+uuid);
+        callback();
+      }
+      else {
+        console.log("informing FHEM about "+uuid);
+        try {
+            var cmd="setreading " + station + "FlowerPower last";
+            cmd= cmd + " uuid:" + uuid;
+            cmd= cmd + " lastState:" + devices[uuid].state;
+            if (devices[uuid].state == 'error') {
+              cmd= cmd + " lastError:" + devices[uuid].error;
+            }
+            else {
+              cmd= cmd + " batteryLevel:" + devices[uuid].batteryLevel;
+              cmd= cmd + " historyStartIdx:" + devices[uuid].api.historyIndex;
+              cmd= cmd + " historyLastEntry:" + devices[uuid].lastEntry;
+              cmd= cmd + " sessionID:" + devices[uuid].currentID;
+              cmd= cmd + " sessionStartIdx:" + devices[uuid].sessionStartIndex;
+            }
+
+            console.log("cmd is "+cmd);
+            http.get({
+                host:'hal.fritz.box', 
+                port:8088, 
+                path: '/fhem?cmd='+encodeURIComponent(cmd)+'&XHR=1'
+            }, (res) => {
+                console.log(`Got response: ${res.statusCode}`);
+                // consume response body
+                res.resume();
+                callback();
+            }).on('error', (e) => {
+                console.log('Got error on http.get(): ${e.message}');
+                callback();
+            });
+        } catch(error) { callback("error while preparing report to FHEM: "+error.message); return; }
+      }
+    },
+
+
+  ],
+  //////////////////////////////////////////////////////////////////
+  function(error, result) {
+    if (error) {
+      if ((error=='disconnect') && (devices[uuid].state == 'disconnect')) {
+        if (2<=debug) console.log("(catching expected disconnect of "+uuid+")");
+        return; // no further callbacks!
+      }
+      console.log("** Early end of waterfall (uuid="+uuid+"): ",error);
+    } else {
+      console.log("Finishing waterfall (uuid="+uuid+") as planned.");
+    }
+    callback();
+  });
+}
+
+/*
+      try {
+            var cmd="setreading " + station + "FlowerPower last";
+            cmd= cmd + " uuid:" + uuid;
+            cmd= cmd + " lastError:" + error;
+            console.log("cmd is "+cmd);
+            http.get({
+                host:'hal.fritz.box',
+                port:8088,
+                path: '/fhem?cmd='+encodeURIComponent(cmd)+'&XHR=1'
+            }, (res) => {
+                console.log(`Got response: ${res.statusCode}`);
+                // consume response body
+                res.resume();
+            }).on('error', (e) => {
+                console.log('Got error on http.get(): ${e.message}');
+            });
+      } catch(error) { callback(": "+error.message); return; }
+
+*/
 
 
 /* *************************************************************************************************
@@ -215,6 +311,7 @@ function connectAndReadout(uuid, callback)
       try {
             sensor.getHistoryLastEntryIdx(function(data) {
               lastEntry = data;
+              devices[uuid].lastEntry = lastEntry;
               console.log('getHistoryLastEntryIdx:' + lastEntry);
               startIdx = devices[uuid].api.historyIndex;
               callback();
@@ -227,6 +324,7 @@ function connectAndReadout(uuid, callback)
       try {
             sensor.getHistoryCurrentSessionID(function(data) {
               currentID = data;
+              devices[uuid].currentID = currentID;
               console.log('getHistoryCurrentSessionID: ' + currentID);
               callback();
             });
@@ -238,6 +336,7 @@ function connectAndReadout(uuid, callback)
       try {
             sensor.getHistoryCurrentSessionStartIdx(function(data) {
               sessionStartIndex = data;
+              devices[uuid].sessionStartIndex = sessionStartIndex;
               console.log('getHistoryCurrentSessionStartIdx: ' + sessionStartIndex);
               callback();
             });
@@ -249,6 +348,7 @@ function connectAndReadout(uuid, callback)
       try {
             sensor.getHistoryCurrentSessionPeriod(function(data) {
               sessionPeriod = data;
+              devices[uuid].sessionPeriod = sessionPeriod;
               console.log('getHistoryCurrentSessionPeriod: ' + sessionPeriod);
               callback();
             });
@@ -342,33 +442,6 @@ function connectAndReadout(uuid, callback)
     },
 
     //--------------------------------------------------------------
-    function(callback) { // -------- waterfall task: report to FHEM
-      console.log("informing FHEM about "+uuid);
-      try {
-            var cmd="setreading " + station + "FlowerPower last";
-            cmd= cmd + " uuid:" + uuid;
-            cmd= cmd + " batteryLevel:" + devices[uuid].batteryLevel;
-            cmd= cmd + " historyStartIdx:" + startIdx;
-            cmd= cmd + " historyLastEntry:" + lastEntry;
-            cmd= cmd + " sessionID:" + currentID;
-            cmd= cmd + " sessionStartIdx:" + sessionStartIndex;
-            console.log("cmd is "+cmd);
-            http.get({
-                host:'hal.fritz.box', 
-                port:8088, 
-                path: '/fhem?cmd='+encodeURIComponent(cmd)+'&XHR=1'
-            }, (res) => {
-                console.log(`Got response: ${res.statusCode}`);
-                // consume response body
-                res.resume();
-            }).on('error', (e) => {
-                console.log('Got error on http.get(): ${e.message}');
-            });
-            callback();
-      } catch(error) { callback(": "+error.message); return; }
-    },
-
-    //--------------------------------------------------------------
     function(callback) { // -------- waterfall task: disconnect
       if (1<=debug) console.log("final steps for "+uuid);
       devices[uuid].state= 'disconnect';
@@ -387,23 +460,9 @@ function connectAndReadout(uuid, callback)
         return; // no further callbacks!
       }
       console.log("** Early end of waterfall (uuid="+uuid+"): ",error);
-      try {
-            var cmd="setreading " + station + "FlowerPower last";
-            cmd= cmd + " uuid:" + uuid;
-            cmd= cmd + " lastError:" + error;
-            console.log("cmd is "+cmd);
-            http.get({
-                host:'hal.fritz.box',
-                port:8088,
-                path: '/fhem?cmd='+encodeURIComponent(cmd)+'&XHR=1'
-            }, (res) => {
-                console.log(`Got response: ${res.statusCode}`);
-                // consume response body
-                res.resume();
-            }).on('error', (e) => {
-                console.log('Got error on http.get(): ${e.message}');
-            });
-      } catch(error) { callback(": "+error.message); return; }
+      devices[uuid].laststate = devices[uuid].state;
+      devices[uuid].error = error;
+      devices[uuid].state = 'error';
     } else {
       console.log("Finishing waterfall (uuid="+uuid+") as planned.");
     } 
